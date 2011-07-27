@@ -4,34 +4,69 @@
 <script src="http://www.html5canvastutorials.com/libraries/kinetic-v1.2.0.js">
 </script>
 <script>
-window.onload = function(){
-  canvas_event_handler = function(ev){
-     console.log(ev.type + ", x = " + ev.layerX + ", y = " + ev.layerY);
-  }
-  canvas = document.getElementById("canvas");
-  canvas.addEventListener('mousedown', canvas_event_handler, false);
-  canvas.addEventListener('mouseup', canvas_event_handler, false);
-  canvas.addEventListener('mousemove', canvas_event_handler, false);
-  
-  var context = canvas.getContext('2d');
 
-  kin = new Kinetic("canvas", "2d");
-  kin.setDrawStage(function(){
-    kin.clear()
-    var mousePos = kin.getMousePos();
-    mouseX = mousePos === null ? 99999 : mousePos.x;
-    mouseY = mousePos === null ? 99999 : mousePos.y;
+var pressPos = null
+var mousePos = [0,0]
+var pressed = false
+var canvas = null
+var context = null
+var kin = null
+
+var translate = [0,0]
+var scale = [1,1]
+
+
+window.onload = function(){
+    canvas = document.getElementById("canvas");
+    context = canvas.getContext('2d');
+    
+    canvas.addEventListener('mousedown', press, false);
+    canvas.addEventListener('mouseup', release, false);
+    canvas.addEventListener('mousewheel', wheel, false);
+//     canvas.addEventListener('mousemove', canvas_event_handler, false);
+    
+    kin = new Kinetic("canvas", "2d");
+    kin.setDrawStage(draw);
+    kin.startAnimation();
+}
+
+function draw() {
+    nextPos = kin.getMousePos();
+    if (nextPos == null)
+        return
+        
+    if (pressed) {
+        dif = [nextPos.x-mousePos.x, nextPos.y-mousePos.y]
+        translate[0] += dif[0]
+        translate[1] += dif[1]
+    }
+    mousePos = nextPos
     //console.log("mouseX = " + mouseX);
     //console.log("mouseY = " + mouseY);
-    context.setTransform(1, 0, 0, 1, 0, 0);
-    context.translate(mouseX, mouseY);
+    kin.clear()
+    context.setTransform(scale[0], 0, 0, scale[1], translate[0], translate[1]);
     context.fillStyle = "rgb(255,0,0)";
     context.fillRect(0, 0, 50, 50);
-  });
-  kin.startAnimation();
 }
+
+function press() {
+    pressPos = mousePos
+    pressed = true;
+//     console.log('press')
+}
+
+function release() {
+    pressed = false;    
+}
+
+function wheel(ev) {
+    d = ev.wheelDelta
+    scale[0] *= Math.pow(1.01, d/20.)
+    scale[1] *= Math.pow(1.01, d/20.)
+}
+
 </script>
-<canvas id="canvas" width="200" height="200" style="border:1px solid #000000">
+<canvas id="canvas" width="800" height ="500" style="border:1px solid #000000;">
 This text is displayed if your browser does not support HTML5 Canvas.
 </canvas>
 </body>
