@@ -78,7 +78,7 @@ class Clock(object):
             #x = self.data['x'] - ref.data['x']
             #y = self.data['t']
         
-        step = 0.5
+        step = 1.0
         #mod = self.data['pt'] % step
         #inds = np.argwhere(abs(mod[1:] - mod[:-1]) > step*0.9)
         inds = [0]
@@ -327,12 +327,12 @@ def plot(clocks, plot, ref=False):
 #f = 0.3017  ## 5.0
 f = 0.3
 prog = [
-    (0.0,   f),
-    (2.0,   0.0),
-    (8.0,  -f),
-    (12.0,  0.0),
-    (18.0,  f),
-    (20.0,  0),
+    (6.0,   f),
+    (8.0,   0.0),
+    (14.0,  -f),
+    (18.0,  0.0),
+    (24.0,  f),
+    (26.0,  0),
 ]
 prog2 = [(t, -f) for (t,f) in prog] 
 
@@ -345,7 +345,7 @@ clocks.update({    ## all clocks included in the simulation
     'opposite': Clock(x0=0.0, prog=prog2, pen='b'),  ## opposite of accelerated twin
     'matched': Clock(x0=1.0, prog=prog, pen=(255,200,0)),     ## Offset from accelerated twin
     'matched2': Clock(x0=-1.0, prog=prog, pen=(255,200,0)),     ## Offset from accelerated twin
-    'tag': Clock(x0=4.802*2, prog=prog2, pen='g'),       ## tags accelerated twin at the end of his journey
+    'tag': Clock(x0=10., prog=prog2, pen='g'),       ## tags accelerated twin at the end of his journey
 })
 
 
@@ -386,8 +386,8 @@ win = pg.GraphicsWindow()
 
 
 
-dt = 0.01
-dur = 25.0
+dt = 0.001
+dur = 32.0
 nPts = int(dur/dt)+1
 
 run(dt, nPts, clocks, clocks['accel'])
@@ -400,5 +400,34 @@ plot(clocks, p2, ref=True)
 
 #print "\nAccelerated reference analysis:"
 #analyze()
+
+print "===  Length contraction test:  ==="
+
+c1 = clocks[('fixed', 0)]
+c2 = clocks[('fixed', -1)]
+
+d1 = c2.inertData['x'][0] - c1.inertData['x'][0]
+print "Clocks are %f apart in rest frame" % d1
+
+ref = clocks['accel']
+ind = np.argwhere(ref.refData['pt'] > 12)[0,0]
+d2 = c2.refData['x'][ind] - c1.refData['x'][ind]
+print "Clocks are %f apart at max speed" % d2
+
+speed = ref.inertData['v'][ind]
+print "Max speed is %f" % speed
+print "Expected contraction:", (1.0 - speed**2/C**2)**0.5
+print "Measured contraction:", d2 / d1
+
+print "\n===  Time dilation test:  ==="
+
+ind = np.argwhere(ref.inertData['t'] > 32.)[0,0]
+t1 = c1.inertData['t'][ind]
+t2 = ref.inertData['pt'][ind]
+print "Time difference in rest frame:", t1-t2
+
+t1 = c1.refData['pt'][ind]
+t2 = ref.refData['pt'][ind]
+print "Time difference in accelerated frame:", t1-t2
 
 

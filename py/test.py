@@ -182,7 +182,7 @@ clocks.update({    ## all clocks included in the simulation
 })
 
 
-dt = 0.01
+dt = 0.001
 dur = 32.0
 nPts = int(dur/dt)
 
