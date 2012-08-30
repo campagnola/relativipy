@@ -202,10 +202,15 @@ def tauStep(dtau, v0, x0, t0, g):
     ## If an object has proper acceleration g and starts at position x0 with speed v0 at time t0
     ## as seen from an inertial frame, then return the new v, x, t after proper time dtau has elapsed.
     
-    ## This is incorrect for large dtau because gamma changes during the timestep.
-    
+
+    ## Compute how much t will change given a proper-time step of dtau
     gamma = (1. - v0**2 / C**2)**-0.5
-    dt = dtau * gamma
+    if g == 0:
+        dt = dtau * gamma
+    else:
+        v0g = v0 * gamma
+        dt = (np.sinh(dtau * g + np.arcsinh(v0g)) - v0g) / g
+    
     #return v0 + dtau * g, x0 + v0*dt, t0 + dt
     v1, x1, t1 = hypTStep(dt, v0, x0, t0, g)
     return v1, x1, t0+dt
