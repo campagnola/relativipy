@@ -2,7 +2,7 @@ import pyqtgraph as pg
 import numpy as np
 import user
 import collections
-
+import sys
 C = 1.0 
 
 def gamma(v):
@@ -63,6 +63,25 @@ class Clock(object):
         if t is None:
             t = self.pt
         return self.force(t) / self.m0
+        
+    def accelLimits(self):
+        ## return the proper time values which bound the current acceleration command
+        if self.prog is None:
+            return -np.inf, np.inf
+        t = self.pt
+        ind = -1
+        for i, v in enumerate(self.prog):
+            t1,f = v
+            if t >= t1:
+                ind = i
+        
+        if ind == -1:
+            return -np.inf, self.prog[0][0]
+        elif ind == len(self.prog)-1:
+            return self.prog[-1][0], np.inf
+        else:
+            return self.prog[ind][0], self.prog[ind+1][0]
+        
         
     def getCurve(self, ref=False):
         
@@ -229,6 +248,7 @@ def hypIntersect(x0r, t0r, vr, x0, t0, v0, g):
     
 
 def run(dt, nPts, clocks, ref):
+    
     for cl in clocks.itervalues():
         cl.init(nPts)
     
@@ -244,7 +264,9 @@ def run(dt, nPts, clocks, ref):
     ref.refm = ref.m0
     
     for i in xrange(1,nPts):
-        
+        if i % 100 == 0:
+            print ".",
+            sys.stdout.flush()
         ## step reference clock ahead one time step in its proper time
         v, x, t = tauStep(dt, ref.v, ref.x, ref.t, ref.acceleration())
         ref.pt += dt
@@ -260,19 +282,37 @@ def run(dt, nPts, clocks, ref):
         
         ## update all other clocks
         for cl in clocks.itervalues():
-            g = cl.acceleration()
-            ##Given current position / speed of clock, determine where it will intersect reference plane
-            #t1 = (ref.v * (cl.x - cl.v * cl.t) + (ref.t - ref.v * ref.x)) / (1. - cl.v)
-            t1 = hypIntersect(ref.x, ref.t, ref.v, cl.x, cl.t, cl.v, g)
-            dt1 = t1 - cl.t
-            
-            ## advance clock by correct time step
-            v, x, tau = hypTStep(dt1, cl.v, cl.x, cl.pt, g)
-            cl.v = v
-            cl.x = x
-            cl.pt = tau
-            cl.t = t1
-            cl.m = None
+            while True:
+                g = cl.acceleration()
+                tau1, tau2 = cl.accelLimits()
+                ##Given current position / speed of clock, determine where it will intersect reference plane
+                #t1 = (ref.v * (cl.x - cl.v * cl.t) + (ref.t - ref.v * ref.x)) / (1. - cl.v)
+                t1 = hypIntersect(ref.x, ref.t, ref.v, cl.x, cl.t, cl.v, g)
+                dt1 = t1 - cl.t
+                
+                ## advance clock by correct time step
+                v, x, tau = hypTStep(dt1, cl.v, cl.x, cl.pt, g)
+                
+                ## check to see whether we have gone past an acceleration command boundary.
+                ## if so, we must instead advance the clock to the boundary and start again
+                if tau < tau1:
+                    dtau = tau1 - cl.pt
+                    cl.v, cl.x, cl.t = tauStep(dtau, cl.v, cl.x, cl.t, g)
+                    cl.pt = tau1-0.000001  
+                    continue
+                if tau > tau2:
+                    dtau = tau2 - cl.pt
+                    cl.v, cl.x, cl.t = tauStep(dtau, cl.v, cl.x, cl.t, g)
+                    cl.pt = tau2
+                    continue
+                
+                ## Otherwise, record the new values and exit the loop
+                cl.v = v
+                cl.x = x
+                cl.pt = tau
+                cl.t = t1
+                cl.m = None
+                break
             
             ## transform position into reference frame
             x = cl.x - ref.x
@@ -386,7 +426,7 @@ win = pg.GraphicsWindow()
 
 
 
-dt = 0.001
+dt = 0.1
 dur = 32.0
 nPts = int(dur/dt)+1
 
