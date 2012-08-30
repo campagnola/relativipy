@@ -104,7 +104,7 @@ class Clock(object):
         pt = data['pt']
         for i in range(1,len(pt)):
             diff = pt[i] - pt[inds[-1]]
-            if abs(diff) > step:
+            if abs(diff) >= step:
                 inds.append(i)
         inds = np.array(inds)
         
@@ -201,6 +201,9 @@ def tauStep(dtau, v0, x0, t0, g):
     ## linear step in proper time of clock.
     ## If an object has proper acceleration g and starts at position x0 with speed v0 at time t0
     ## as seen from an inertial frame, then return the new v, x, t after proper time dtau has elapsed.
+    
+    ## This is incorrect for large dtau because gamma changes during the timestep.
+    
     gamma = (1. - v0**2 / C**2)**-0.5
     dt = dtau * gamma
     #return v0 + dtau * g, x0 + v0*dt, t0 + dt
@@ -263,17 +266,31 @@ def run(dt, nPts, clocks, ref):
     ref.refv = 0
     ref.refm = ref.m0
     
+    ## These are the set of proper times (in the reference frame) that will be simulated
+    ptVals = np.linspace(ref.pt, ref.pt + dt*(nPts-1), nPts)
+    
     for i in xrange(1,nPts):
         if i % 100 == 0:
             print ".",
             sys.stdout.flush()
+            
         ## step reference clock ahead one time step in its proper time
-        v, x, t = tauStep(dt, ref.v, ref.x, ref.t, ref.acceleration())
-        ref.pt += dt
-        ref.v = v
-        ref.x = x
-        ref.t = t
-        ref.reft = ref.pt
+        nextPt = ptVals[i]  ## this is where (when) we want to end up
+        while True:
+            tau1, tau2 = ref.accelLimits()
+            dtau = min(nextPt-ref.pt, tau2-ref.pt)  ## do not step past the next command boundary
+            g = ref.acceleration()
+            v, x, t = tauStep(dtau, ref.v, ref.x, ref.t, g)
+            ref.pt += dtau
+            ref.v = v
+            ref.x = x
+            ref.t = t
+            ref.reft = ref.pt
+            print ref.pt, ref.v, ref.x, g
+            if ref.pt >= nextPt:
+                break
+            else:
+                print "Stepped to", tau2, "instead of", nextPt
         ref.recordFrame(i)
         
         ## determine plane visible to reference clock
@@ -426,7 +443,7 @@ win = pg.GraphicsWindow()
 
 
 
-dt = 0.1
+dt = 1.1
 dur = 32.0
 nPts = int(dur/dt)+1
 
