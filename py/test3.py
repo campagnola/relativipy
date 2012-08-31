@@ -29,8 +29,8 @@ class Clock(object):
 
     def init(self, nPts):
         ## Keep records of object from inertial frame as well as reference frame
-        self.inertData = np.empty(nPts, dtype=[('x', float), ('t', float), ('v', float), ('pt', float), ('m', float)])
-        self.refData = np.empty(nPts, dtype=[('x', float), ('t', float), ('v', float), ('pt', float), ('m', float)])
+        self.inertData = np.empty(nPts, dtype=[('x', float), ('t', float), ('v', float), ('pt', float), ('m', float), ('f', float)])
+        self.refData = np.empty(nPts, dtype=[('x', float), ('t', float), ('v', float), ('pt', float), ('m', float), ('f', float)])
         
         ## Inertial frame variables
         self.x = self.x0
@@ -48,12 +48,15 @@ class Clock(object):
         self.recordFrame(0)
         
     def recordFrame(self, i):
-        self.inertData[i] = (self.x, self.t, self.v, self.pt, self.m)
-        self.refData[i] = (self.refx, self.reft, self.refv, self.pt, self.refm)
+        f = self.force()
+        self.inertData[i] = (self.x, self.t, self.v, self.pt, self.m, f)
+        self.refData[i] = (self.refx, self.reft, self.refv, self.pt, self.refm, f)
         
-    def force(self, t):
+    def force(self, t=None):
         if self.prog is None:
             return 0.0
+        if t is None:
+            t = self.pt
         
         ret = 0.0
         for t1,f in self.prog:
@@ -62,8 +65,6 @@ class Clock(object):
         return ret
         
     def acceleration(self, t=None):
-        if t is None:
-            t = self.pt
         return self.force(t) / self.m0
         
     def accelLimits(self):
@@ -409,6 +410,8 @@ class Animation(pg.ItemGroup):
         self.t += self.dt * 0.001
         if self.t > self.tStop:
             self.t = self.tStart
+            for cl in self.items.values():
+                cl.reset()
             
         for i in self.items.values():
             i.stepTo(self.t)
@@ -424,8 +427,18 @@ class ClockItem(pg.ItemGroup):
         self.hand = QtGui.QGraphicsLineItem(0, 0, 0, self.size*0.5)
         self.hand.setPen(pg.mkPen('w'))
         self.hand.setZValue(10)
+        self.flare = QtGui.QGraphicsPolygonItem(QtGui.QPolygonF([
+            QtCore.QPointF(0, -self.size*0.25),
+            QtCore.QPointF(0, self.size*0.25),
+            QtCore.QPointF(1, 0),
+            QtCore.QPointF(0, -self.size*0.25),
+            ]))
+        self.flare.setPen(pg.mkPen('y'))
+        self.flare.setBrush(pg.mkBrush(100,100,0))
+        self.flare.setZValue(-10)
         self.addItem(self.hand)
         self.addItem(self.item)
+        self.addItem(self.flare)
  
         self.clock = clock
         self.ref = ref
@@ -450,6 +463,13 @@ class ClockItem(pg.ItemGroup):
         v = data['v'][self.i]
         gam = (1.0 - v**2)**0.5
         self.scale(gam, 1.0)
+        
+        self.flare.resetTransform()
+        self.flare.translate(self.size*0.4, 0)
+        self.flare.scale(-data['f'][self.i], 1.0)
+        
+    def reset(self):
+        self.i = 1
         
         
     
@@ -490,7 +510,7 @@ win = pg.GraphicsWindow()
 
 ## Acceleration program: accelerate, wait, reverse, wait, and stop
 #f = 0.3017  ## 5.0
-f = 0.3
+f = 0.6
 prog = [
     (6.0,   f),
     (8.0,   0.0),
