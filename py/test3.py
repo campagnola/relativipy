@@ -1,4 +1,5 @@
 import pyqtgraph as pg
+from pyqtgraph.Qt import QtGui, QtCore
 import numpy as np
 import user
 import collections
@@ -11,7 +12,7 @@ def gamma(v):
 class Clock(object):
     nClocks = 0
     
-    def __init__(self, x0=0.0, m0=1.0, v0=0.0, t0=0.0, pen=None, brush=None, prog=None):
+    def __init__(self, x0=0.0, y0=0.0, m0=1.0, v0=0.0, t0=0.0, pen=None, brush=None, prog=None):
         if pen is None:
             pen = pg.intColor(Clock.nClocks, 12)
         if brush is None:
@@ -19,6 +20,7 @@ class Clock(object):
         Clock.nClocks += 1
         self.pen = pg.mkPen(pen)
         self.brush = pg.mkBrush(brush)
+        self.y0 = y0
         self.x0 = x0
         self.v0 = v0
         self.m0 = m0
@@ -291,11 +293,10 @@ def run(dt, nPts, clocks, ref):
             ref.x = x
             ref.t = t
             ref.reft = ref.pt
-            print ref.pt, ref.v, ref.x, g
             if ref.pt >= nextPt:
                 break
-            else:
-                print "Stepped to", tau2, "instead of", nextPt
+            #else:
+                #print "Stepped to", tau2, "instead of", nextPt
         ref.recordFrame(i)
         
         ## determine plane visible to reference clock
@@ -343,8 +344,8 @@ def run(dt, nPts, clocks, ref):
             vg = -ref.v * gamma
             
             cl.refx = gamma * (x - ref.v * t)
-            cl.reft = ref.pt + gamma * (t - ref.v * x)
-            cl.refv = None
+            cl.reft = ref.pt  #  + gamma * (t - ref.v * x)   # this term belongs here, but it should always be equal to 0.
+            cl.refv = (cl.v - ref.v) / (1.0 - cl.v * ref.v)
             cl.refm = None
             cl.recordFrame(i)
             
@@ -384,6 +385,108 @@ def plot(clocks, plot, ref=False):
 
 
 
+class Animation(pg.ItemGroup):
+    def __init__(self, clocks, start, stop, ref=False):
+        pg.ItemGroup.__init__(self)
+        self.clocks = clocks
+        self.ref = ref
+        self.tStart = start
+        self.tStop = stop
+        self.t = 0
+        self.dt = 16
+        
+        self.items = {}
+        for name, cl in clocks.items():
+            item = ClockItem(cl, ref)
+            self.addItem(item)
+            self.items[name] = item
+            
+        self.timer = QtCore.QTimer()
+        self.timer.timeout.connect(self.step)
+        self.timer.start(self.dt)
+        
+    def step(self):
+        self.t += self.dt * 0.001
+        if self.t > self.tStop:
+            self.t = self.tStart
+            
+        for i in self.items.values():
+            i.stepTo(self.t)
+
+class ClockItem(pg.ItemGroup):
+    def __init__(self, clock, ref):
+        pg.ItemGroup.__init__(self)
+        self.size = 0.4
+        self.item = QtGui.QGraphicsEllipseItem(QtCore.QRectF(0, 0, self.size, self.size))
+        self.item.translate(-self.size*0.5, -self.size*0.5)
+        self.item.setPen(clock.pen)
+        self.item.setBrush(clock.brush)
+        self.hand = QtGui.QGraphicsLineItem(0, 0, 0, self.size*0.5)
+        self.hand.setPen(pg.mkPen('w'))
+        self.hand.setZValue(10)
+        self.addItem(self.hand)
+        self.addItem(self.item)
+ 
+        self.clock = clock
+        self.ref = ref
+        self.i = 1
+        
+    def stepTo(self, t):
+        if self.ref:
+            data = self.clock.refData
+        else:
+            data = self.clock.inertData
+        while self.i < len(data)-1 and data['t'][self.i] < t:
+            self.i += 1
+        while self.i > 1 and data['t'][self.i-1] >= t:
+            self.i -= 1
+        
+        self.setPos(data['x'][self.i], self.clock.y0)
+        
+        t = data['pt'][self.i]
+        self.hand.setRotation(-0.25 * t * 360.)
+        
+        self.resetTransform()
+        v = data['v'][self.i]
+        gam = (1.0 - v**2)**0.5
+        self.scale(gam, 1.0)
+        
+        
+    
+def showAnimation(clocks, refClock):
+    win = pg.GraphicsWindow()
+    p1 = win.addPlot()
+    p2 = win.addPlot(row=1, col=0)
+    p1.setAspectLocked(1)
+    p2.setAspectLocked(1)
+    win.show()
+    win.anim1 = Animation(clocks, 0, 35, ref=False)
+    win.anim2 = Animation(clocks, 0, 35, ref=True)
+    p1.addItem(win.anim1)
+    p2.addItem(win.anim2)
+    p1.autoRange()
+    p2.autoRange()
+    
+
+        
+
+        
+        
+win = pg.GraphicsWindow()
+
+#dt = 0.001
+#dur = 35.0
+#nPts = int(dur/dt)+1
+##run(dt, nPts, clocks, clocks[('fixed', 0)])
+
+#p1 = win.addPlot()
+#plot(clocks, p1)
+
+#print "Inertial reference analysis:"
+#analyze()
+#print "Distance traveled:", clocks['accel'].data['x'].max()
+
+
 
 ## Acceleration program: accelerate, wait, reverse, wait, and stop
 #f = 0.3017  ## 5.0
@@ -403,52 +506,15 @@ for x in range(-10,11):
     clocks[('fixed', x)] = Clock(x0=x, pen=(100,100,100))
 
 clocks.update({    ## all clocks included in the simulation
-    'accel': Clock(x0=0.0, prog=prog, pen='r'),      ## accelerated twin
-    'opposite': Clock(x0=0.0, prog=prog2, pen='b'),  ## opposite of accelerated twin
-    'matched': Clock(x0=1.0, prog=prog, pen=(255,200,0)),     ## Offset from accelerated twin
-    'matched2': Clock(x0=-1.0, prog=prog, pen=(255,200,0)),     ## Offset from accelerated twin
-    'tag': Clock(x0=10., prog=prog2, pen='g'),       ## tags accelerated twin at the end of his journey
+    'accel': Clock(x0=0.0, y0=1, prog=prog, pen='r'),      ## accelerated twin
+    'opposite': Clock(x0=0.0, y0=2, prog=prog2, pen='b'),  ## opposite of accelerated twin
+    'matched': Clock(x0=1.0, y0=1, prog=prog, pen=(255,200,0)),     ## Offset from accelerated twin
+    'matched2': Clock(x0=-1.0, y0=1, prog=prog, pen=(255,200,0)),     ## Offset from accelerated twin
+    'tag': Clock(x0=10., y0=2, prog=prog2, pen='g'),       ## tags accelerated twin at the end of his journey
 })
 
 
-def analyze():
-
-    fixed0 = clocks[('fixed',0)]
-    fixed1 = clocks[('fixed',-1)]
-    l0 = fixed1.data['x'][0] - fixed0.data['x'][0]
-    t1 = 5/dt
-    l1 = fixed1.data['x'][t1] - fixed0.data['x'][t1]
-    v = fixed1.data['v'][t1]
-    dpt = (fixed1.data['pt'][t1]-fixed1.data['pt'][t1-1]) / dt
-    print "  Fixed clocks:"
-    print "    velocity:", v
-    print "    length contraction:", l1/l0
-    print "    time contraction:", dpt
-    print "    expected contraction:", 1.0/gamma(v)
-
-    print "  Twin:"
-    print "    time difference:", fixed0.data['pt'][-1] - clocks['accel'].data['pt'][-1]
-    
-    
-    
-    
-win = pg.GraphicsWindow()
-
-#dt = 0.001
-#dur = 35.0
-#nPts = int(dur/dt)+1
-##run(dt, nPts, clocks, clocks[('fixed', 0)])
-
-#p1 = win.addPlot()
-#plot(clocks, p1)
-
-#print "Inertial reference analysis:"
-#analyze()
-#print "Distance traveled:", clocks['accel'].data['x'].max()
-
-
-
-dt = 1.1
+dt = 0.01
 dur = 32.0
 nPts = int(dur/dt)+1
 
@@ -493,3 +559,4 @@ t2 = ref.refData['pt'][ind]
 print "Time difference in accelerated frame:", t1-t2
 
 
+showAnimation(clocks, 'accel')
