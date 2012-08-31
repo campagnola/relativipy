@@ -1,0 +1,182 @@
+(* Content-type: application/mathematica *)
+
+(*** Wolfram Notebook File ***)
+(* http://www.wolfram.com/nb *)
+
+(* CreatedBy='Mathematica 7.0' *)
+
+(*CacheID: 234*)
+(* Internal cache information:
+NotebookFileLineBreakTest
+NotebookFileLineBreakTest
+NotebookDataPosition[       145,          7]
+NotebookDataLength[      5188,        173]
+NotebookOptionsPosition[      4737,        155]
+NotebookOutlinePosition[      5277,        175]
+CellTagsIndexPosition[      5234,        172]
+WindowFrame->Normal*)
+
+(* Beginning of Notebook Content *)
+Notebook[{
+Cell[TextData[{
+ "This was an attempt to define the problem as a set of differential \
+equations. It ",
+ StyleBox["almost",
+  FontSlant->"Italic"],
+ " works.\n- One spatial dimension, one time dimension. \n- There are N \
+clocks. Initially, all clocks have zero velocity and synchronized times, but \
+different positions and masses.\n- Clocks have acceleration 'programs' that \
+specify the force that will be applied to the clock at specific proper times. \
+(For example, a rocket attached to a clock fires until the clock reads 2.0, \
+then stops until the clock reads 8.0, then fires in reverse, etc.)\n- The \
+simulation computes the path of each clock as seen by any one of the clocks \
+(the reference clock). \n\n",
+ Cell[BoxData[
+  FormBox["t", TraditionalForm]]],
+ " is the current proper time of the reference clock (initialized to 0).\nAt \
+every time step ",
+ Cell[BoxData[
+  FormBox["\[CapitalDelta]t", TraditionalForm]]],
+ ", I run the following procedure:\n    1) Compute instantaneous acceleration \
+of reference clock at time t\n    ",
+ Cell[BoxData[
+  FormBox[
+   RowBox[{
+    SubscriptBox["g", "ref"], " ", "=", " ", 
+    RowBox[{
+     RowBox[{
+      SubscriptBox["f", "ref"], "(", "t", ")"}], " ", "/", " ", 
+     SubscriptBox["m", "ref"]}]}], TraditionalForm]]],
+ "\n\n    2) For each clock ",
+ Cell[BoxData[
+  FormBox["C", TraditionalForm]]],
+ " in the simulation:\n          ",
+ Cell[BoxData[
+  FormBox["m", TraditionalForm]]],
+ ", ",
+ Cell[BoxData[
+  FormBox["x", TraditionalForm]]],
+ ", and ",
+ Cell[BoxData[
+  FormBox["v", TraditionalForm]]],
+ " are the mass, position, and velocity of the ",
+ Cell[BoxData[
+  FormBox["C", TraditionalForm]]],
+ " relative to the reference clock at time ",
+ Cell[BoxData[
+  FormBox["t", TraditionalForm]]],
+ ".\n          ",
+ Cell[BoxData[
+  FormBox[
+   RowBox[{"\[Tau]", " "}], TraditionalForm]]],
+ "is the proper time of ",
+ Cell[BoxData[
+  FormBox["C", TraditionalForm]]],
+ " as seen by the reference clock at time ",
+ Cell[BoxData[
+  FormBox["t", TraditionalForm]]],
+ ".\n          ",
+ Cell[BoxData[
+  FormBox[
+   SubscriptBox["m", "0"], TraditionalForm]]],
+ " is the proper inertial mass of ",
+ Cell[BoxData[
+  FormBox["C", TraditionalForm]]],
+ ".\n          ",
+ Cell[BoxData[
+  FormBox[
+   RowBox[{
+    SubscriptBox["f", "C"], "(", "\[Tau]", ")"}], TraditionalForm]]],
+ " is the force applied to ",
+ Cell[BoxData[
+  FormBox["C", TraditionalForm]]],
+ " at its proper time \[Tau]\n      \n          ",
+ Cell[BoxData[
+  FormBox[
+   RowBox[{"\[Gamma]", "=", 
+    SqrtBox[
+     RowBox[{"1", "-", 
+      RowBox[{
+       SuperscriptBox["v", "2"], "/", 
+       SuperscriptBox["c", "2"]}]}]]}], TraditionalForm]]],
+ "\n          ",
+ Cell[BoxData[
+  FormBox[
+   RowBox[{"m", "=", 
+    RowBox[{"\[Gamma]", " ", 
+     SubscriptBox["m", "0"]}]}], TraditionalForm]]],
+ "\n          ",
+ Cell[BoxData[
+  FormBox[
+   RowBox[{"\[Beta]", "=", 
+    RowBox[{
+     FractionBox[
+      RowBox[{"x", " ", 
+       SubscriptBox["g", "ref"]}], 
+      SuperscriptBox["c", "2"]], "+", "1"}]}], TraditionalForm]]],
+ "     (This is a time dilation factor due to the acceleration of the \
+reference clock)\n          ",
+ Cell[BoxData[
+  FormBox[
+   RowBox[{"g", "=", 
+    RowBox[{
+     FractionBox[
+      RowBox[{"\[Beta]", " ", 
+       RowBox[{
+        SubscriptBox["f", "C"], "(", "\[Tau]", ")"}]}], "m"], "-", 
+     SubscriptBox["g", "ref"]}]}], TraditionalForm]]],
+ "\n          ",
+ Cell[BoxData[
+  FormBox[
+   RowBox[{"\[Tau]", "+=", 
+    RowBox[{
+     FractionBox["\[Beta]", "\[Gamma]"], "\[CapitalDelta]t"}]}], 
+   TraditionalForm]]],
+ "\n          ",
+ Cell[BoxData[
+  FormBox[
+   RowBox[{"v", "+=", 
+    RowBox[{"g", " ", "\[CapitalDelta]t"}]}], TraditionalForm]]],
+ "\n          ",
+ Cell[BoxData[
+  FormBox[
+   RowBox[{"x", "+=", 
+    RowBox[{"\[Beta]", " ", "v", " ", "\[CapitalDelta]t"}]}], 
+   TraditionalForm]]],
+ "\n          \n      3) Increment time\n          ",
+ Cell[BoxData[
+  FormBox[
+   RowBox[{"t", "+=", "\[CapitalDelta]t"}], TraditionalForm]]],
+ "\n          \n      \n    \n\n\n\n"
+}], "Text",
+ CellChangeTimes->{
+  3.523492818617631*^9, {3.52349304355148*^9, 3.523493081178849*^9}, {
+   3.555432981131118*^9, 3.555433051123339*^9}}]
+},
+WindowSize->{832, 750},
+WindowMargins->{{191, Automatic}, {Automatic, 79}},
+PrintingPageRange->{Automatic, Automatic},
+PrintingOptions->{"Magnification"->1.,
+"PaperOrientation"->"Portrait",
+"PaperSize"->{611.28, 789.57},
+"PostScriptOutputFile"->"/home/luke/tmp/relativity.pdf"},
+FrontEndVersion->"8.0 for Linux x86 (32-bit) (October 10, 2011)",
+StyleDefinitions->"Default.nb"
+]
+(* End of Notebook Content *)
+
+(* Internal cache information *)
+(*CellTagsOutline
+CellTagsIndex->{}
+*)
+(*CellTagsIndex
+CellTagsIndex->{}
+*)
+(*NotebookFileOutline
+Notebook[{
+Cell[545, 20, 4188, 133, 722, "Text"]
+}
+]
+*)
+
+(* End of internal cache information *)
