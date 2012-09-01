@@ -4,10 +4,9 @@ import numpy as np
 import user
 import collections
 import sys
-C = 1.0 
 
 def gamma(v):
-    return (1.0 - v**2 / C**2) ** -0.5
+    return (1.0 - v**2) ** -0.5
 
 class Clock(object):
     nClocks = 0
@@ -133,50 +132,19 @@ class Clock(object):
         
         return curve, points
         
-        
-#def hyperbolicTimestep(dt, x0, v0, a):
-    ### Given a clock starts at x0 and v0 and accelerates a for dt, return x1 and v1
-    #c2 = C**2
-    #c4 = c2*c2
-    #c6 = c4*c2
-    #a2 = a**2
-    
-    #if v0 == 0:
-        #A = (c2 * dt**2 + c4/a2)**0.5
-        #x1 = x0 + A - (c4/a2)**0.5
-        #v1 = (c2 * dt) / A
-    #else:
-        #v02 = v0**2
-        #acmv2 = a2 * (c2 - v02)
-        #A = c2 * v02   /   (c2 * v02 * acmv2)**0.5
-        #if v0 < 0:
-            #A *= -1
-        #B = ((c4/a2) + c2 * (dt + A)**2)**0.5
-        #print A, B
-        #x1 = x0 - (c6 / acmv2)**0.5 + B
-        #v1 = (c2 * (dt + A)) / B
-    
-    #return x1,v1
     
 def hypTStep(dt, v0, x0, tau0, g):
     ## Hyperbolic step. 
     ## If an object has proper acceleration g and starts at position x0 with speed v0 and proper time tau0
     ## as seen from an inertial frame, then return the new v, x, tau after time dt has elapsed.
     if g == 0:
-        return v0, x0 + v0*dt, tau0 + dt * (1. - v0**2 / C**2)**0.5
-    c2 = C**2
-    c4 = c2**2
+        return v0, x0 + v0*dt, tau0 + dt * (1. - v0**2)**0.5
     v02 = v0**2
     g2 = g**2
     
-    #A = (c2 * v0) / (-(g**2) * (-1 + v02))**0.5
-    #if g > 0:
-        #t0 = A
-    #else:
-        #t0 = -A
-    tinit = (c2 * v0) / (g * (1 - v02)**0.5)
+    tinit = v0 / (g * (1 - v02)**0.5)
     
-    B = c2 * (1 + (g2 * (dt+tinit)**2 / c4))**0.5
+    B = (1 + (g2 * (dt+tinit)**2))**0.5
     
     v1 = g * (dt+tinit) / B
     
@@ -184,11 +152,7 @@ def hypTStep(dt, v0, x0, tau0, g):
     
     tau1 = tau0 + dtau
     
-    ## note: we compute the updated hyperbolic position here, but 
-    ## this is not much different from using x0 + v0*dt
-    #x1 = x0 + v0*dt
-    #x1 = (-c2 * (1. / (1. - v0**2))**0.5 + c2 * B) / g + x0
-    x1 = x0 + (c2 / g) * ( B - 1. / (1.-v02)**0.5 )
+    x1 = x0 + (1.0 / g) * ( B - 1. / (1.-v02)**0.5 )
     
     return v1, x1, tau1
 
@@ -196,7 +160,7 @@ def hypTStep(dt, v0, x0, tau0, g):
 def tStep(dt, v0, x0, tau0, g):
     ## Linear step.
     ## Probably not as accurate as hyperbolic step, but certainly much faster.
-    gamma = (1. - v0**2 / C**2)**-0.5
+    gamma = (1. - v0**2)**-0.5
     dtau = dt / gamma
     return v0 + dtau * g, x0 + v0*dt, tau0 + dtau
 
@@ -207,7 +171,7 @@ def tauStep(dtau, v0, x0, t0, g):
     
 
     ## Compute how much t will change given a proper-time step of dtau
-    gamma = (1. - v0**2 / C**2)**-0.5
+    gamma = (1. - v0**2)**-0.5
     if g == 0:
         dt = dtau * gamma
     else:
@@ -341,7 +305,7 @@ def run(dt, nPts, clocks, ref):
             ## transform position into reference frame
             x = cl.x - ref.x
             t = cl.t - ref.t
-            gamma = (1.0 - ref.v**2 / C**2) ** -0.5
+            gamma = (1.0 - ref.v**2) ** -0.5
             vg = -ref.v * gamma
             
             cl.refx = gamma * (x - ref.v * t)
@@ -350,29 +314,6 @@ def run(dt, nPts, clocks, ref):
             cl.refm = None
             cl.recordFrame(i)
             
-            
-            
-            ##gam = gamma(cl.v)  ## (1.0 - cl.v**2 / C**2)**-0.5
-            ##cl.m = cl.m0 * gam
-            
-            ##beta = (cl.x * ra / C**2) + 1
-                
-            ##dpt = dt * beta / gam   ## change in proper time for this clock
-            
-            ##f = cl.force(cl.pt)
-            
-            ##a = f / cl.m - ra/beta
-            ###a = f / cl.m0 - ra*gam/beta
-            
-            ##cl.t += dt
-            ##cl.pt2 += dpt
-            
-            ##cl.v, cl.x, cl.pt = vStep(dt * beta, cl.v, cl.x, cl.pt, a) 
-            ###cl.v, x = vStep(dpt, cl.v, cl.x, a) 
-            ###cl.x += dt * beta * cl.v
-            
-            cl.recordFrame(i)
-        
         t += dt
     
 def plot(clocks, plot, ref=False):
@@ -564,7 +505,7 @@ print "Clocks are %f apart at max speed" % d2
 
 speed = ref.inertData['v'][ind]
 print "Max speed is %f" % speed
-print "Expected contraction:", (1.0 - speed**2/C**2)**0.5
+print "Expected contraction:", (1.0 - speed**2)**0.5
 print "Measured contraction:", d2 / d1
 
 print "\n===  Time dilation test:  ==="
