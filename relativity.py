@@ -66,19 +66,26 @@ class RelativityGUI(QtGui.QWidget):
         self.refAnimationPlot.setXLink(self.refWorldlinePlot)
 
     def recalculate(self):
-        clocks = collections.OrderedDict()
+        ## build 2 sets of clocks
+        clocks1 = collections.OrderedDict()
+        clocks2 = collections.OrderedDict()
         for cl in self.params.param('Objects'):
-            clocks.update(cl.buildClocks())
-        sim1 = Simulation(clocks, ref=None, duration=self.params['Duration'])
+            clocks1.update(cl.buildClocks())
+            clocks2.update(cl.buildClocks())
+        
+        ## Inertial simulation
+        sim1 = Simulation(clocks1, ref=None, duration=self.params['Duration'])
         sim1.run()
         sim1.plot(self.inertWorldlinePlot)
         
-        ref = clocks[self.params['Reference Frame']]
-        dur = ref.refData['pt'][-1]
-        sim2 = Simulation(clocks, ref=ref, duration=dur)
+        ## reference simulation
+        ref = self.params['Reference Frame']
+        dur = clocks1[ref].refData['pt'][-1] ## decide how long to run the reference simulation
+        sim2 = Simulation(clocks2, ref=clocks2[ref], duration=dur)
         sim2.run()
         sim2.plot(self.refWorldlinePlot)
         
+        ## create animations
         self.refAnimationPlot.clear()
         self.inertAnimationPlot.clear()
         self.setAnimation(False)
@@ -86,6 +93,7 @@ class RelativityGUI(QtGui.QWidget):
         self.animations = [Animation(sim1), Animation(sim2)]
         self.inertAnimationPlot.addItem(self.animations[0])
         self.refAnimationPlot.addItem(self.animations[1])
+        
         
 
     def setAnimation(self, a):
@@ -95,6 +103,8 @@ class RelativityGUI(QtGui.QWidget):
     def treeChanged(self, *args):
         clocks = [c.name() for c in self.params.param('Objects')]
         self.params.param('Reference Frame').setLimits(clocks)
+        for a in self.animations:
+            a.run(self.params['Animate'])
         
         
 class ObjectGroupParam(pTypes.GroupParameter):
@@ -531,7 +541,12 @@ class Animation(pg.ItemGroup):
             
         self.timer = QtCore.QTimer()
         self.timer.timeout.connect(self.step)
-        self.timer.start(self.dt)
+        
+    def run(self, run):
+        if not run:
+            self.timer.stop()
+        else:
+            self.timer.start(self.dt)
         
     def step(self):
         self.t += self.dt * 0.001
@@ -629,11 +644,11 @@ if __name__ == '__main__':
                     {'name': 'Proper Time', 'value': 9.0, 'type': 'float'}, 
                     {'name': 'Acceleration', 'value': 0.0, 'step': 0.1, 'removable': False, 'type': 'float'}]},
                 ]}, 
-            {'name': 'Rest Mass', 'limits': [1e-09, None], 'default': 1.0, 'value': 1.0, 'step': 0.1, 'removable': False, 'type': 'float'}, {'name': 'Color', 'value': (230, 0, 0), 'type': 'color'}, {'name': 'Show Clock', 'default': True, 'value': True, 'type': 'bool'}]},
+            {'name': 'Rest Mass', 'limits': [1e-09, None], 'default': 1.0, 'value': 1.0, 'step': 0.1, 'removable': False, 'type': 'float'}, {'name': 'Color', 'value': (0, 50, 200), 'type': 'color'}, {'name': 'Show Clock', 'default': True, 'value': True, 'type': 'bool'}]},
         {'name': 'Bob', 'default': None, 'renamable': True, 'type': 'Clock', 'children': [
             {'name': 'Initial Position', 'value': 0.0, 'step': 0.1, 'type': 'float'}, 
             {'name': 'Acceleration', 'addText': 'Add Command..', 'type': 'AccelerationGroup'},
-            {'name': 'Rest Mass', 'limits': [1e-09, None], 'default': 1.0, 'value': 1.0, 'step': 0.1, 'removable': False, 'type': 'float'}, {'name': 'Color', 'value': (0, 200, 0), 'type': 'color'}, {'name': 'Show Clock', 'default': True, 'value': True, 'type': 'bool'}]},
+            {'name': 'Rest Mass', 'limits': [1e-09, None], 'default': 1.0, 'value': 1.0, 'step': 0.1, 'removable': False, 'type': 'float'}, {'name': 'Color', 'value': (50, 200, 0), 'type': 'color'}, {'name': 'Show Clock', 'default': True, 'value': True, 'type': 'bool'}]},
         ]}
     
     
