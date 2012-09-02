@@ -13,6 +13,8 @@ class RelativityGUI(QtGui.QWidget):
     def __init__(self):
         QtGui.QWidget.__init__(self)
         
+        self.animations = []
+        
         self.setupGUI()
         
         self.objectGroup = ObjectGroupParam()
@@ -29,7 +31,7 @@ class RelativityGUI(QtGui.QWidget):
             
         self.tree.setParameters(self.params, showTop=False)
         self.params.param('Recalculate Worldlines').sigActivated.connect(self.recalculate)
-        
+        self.params.sigTreeStateChanged.connect(self.treeChanged)
         
     def setupGUI(self):
         self.layout = QtGui.QVBoxLayout()
@@ -56,7 +58,10 @@ class RelativityGUI(QtGui.QWidget):
         self.refWorldlinePlot = self.worldlinePlots.addPlot()
         
         self.inertAnimationPlot = self.animationPlots.addPlot()
+        self.inertAnimationPlot.setAspectLocked(1)
         self.refAnimationPlot = self.animationPlots.addPlot()
+        self.refAnimationPlot.setAspectLocked(1)
+        
         self.inertAnimationPlot.setXLink(self.inertWorldlinePlot)
         self.refAnimationPlot.setXLink(self.refWorldlinePlot)
 
@@ -64,10 +69,34 @@ class RelativityGUI(QtGui.QWidget):
         clocks = collections.OrderedDict()
         for cl in self.params.param('Objects'):
             clocks.update(cl.buildClocks())
-        sim = Simulation(clocks, ref=None, duration=self.params['Duration'])
-        sim.run()
-        sim.plot(self.inertWorldlinePlot)
+        sim1 = Simulation(clocks, ref=None, duration=self.params['Duration'])
+        sim1.run()
+        sim1.plot(self.inertWorldlinePlot)
+        
+        ref = clocks[self.params['Reference Frame']]
+        dur = ref.refData['pt'][-1]
+        sim2 = Simulation(clocks, ref=ref, duration=dur)
+        sim2.run()
+        sim2.plot(self.refWorldlinePlot)
+        
+        self.refAnimationPlot.clear()
+        self.inertAnimationPlot.clear()
+        self.setAnimation(False)
+        
+        self.animations = [Animation(sim1), Animation(sim2)]
+        self.inertAnimationPlot.addItem(self.animations[0])
+        self.refAnimationPlot.addItem(self.animations[1])
+        
 
+    def setAnimation(self, a):
+        for anim in self.animations:
+            anim.run(a)
+        
+    def treeChanged(self, *args):
+        clocks = [c.name() for c in self.params.param('Objects')]
+        self.params.param('Reference Frame').setLimits(clocks)
+        
+        
 class ObjectGroupParam(pTypes.GroupParameter):
     def __init__(self):
         pTypes.GroupParameter.__init__(self, name="Objects", addText="Add New..", addList=['Clock', 'Grid'])
@@ -199,7 +228,7 @@ class Clock(object):
             return self.prog[ind][0], self.prog[ind+1][0]
         
         
-    def getCurve(self, ref=False):
+    def getCurve(self, ref=True):
         
         if ref is False:
             data = self.inertData
@@ -378,6 +407,9 @@ class Simulation:
                         cl.t += dt
                         
                     if cl.t >= nextT:
+                        cl.refx = cl.x
+                        cl.refv = cl.v
+                        cl.reft = cl.t
                         cl.recordFrame(i)
                         break
             
@@ -403,9 +435,6 @@ class Simulation:
         ptVals = np.linspace(ref.pt, ref.pt + dt*(nPts-1), nPts)
         
         for i in xrange(1,nPts):
-            if i % 100 == 0:
-                print ".",
-                sys.stdout.flush()
                 
             ## step reference clock ahead one time step in its proper time
             nextPt = ptVals[i]  ## this is where (when) we want to end up
@@ -413,7 +442,7 @@ class Simulation:
                 tau1, tau2 = ref.accelLimits()
                 dtau = min(nextPt-ref.pt, tau2-ref.pt)  ## do not step past the next command boundary
                 g = ref.acceleration()
-                v, x, t = tauStep(dtau, ref.v, ref.x, ref.t, g)
+                v, x, t = Simulation.tauStep(dtau, ref.v, ref.x, ref.t, g)
                 ref.pt += dtau
                 ref.v = v
                 ref.x = x
@@ -436,22 +465,22 @@ class Simulation:
                     tau1, tau2 = cl.accelLimits()
                     ##Given current position / speed of clock, determine where it will intersect reference plane
                     #t1 = (ref.v * (cl.x - cl.v * cl.t) + (ref.t - ref.v * ref.x)) / (1. - cl.v)
-                    t1 = hypIntersect(ref.x, ref.t, ref.v, cl.x, cl.t, cl.v, g)
+                    t1 = Simulation.hypIntersect(ref.x, ref.t, ref.v, cl.x, cl.t, cl.v, g)
                     dt1 = t1 - cl.t
                     
                     ## advance clock by correct time step
-                    v, x, tau = hypTStep(dt1, cl.v, cl.x, cl.pt, g)
+                    v, x, tau = Simulation.hypTStep(dt1, cl.v, cl.x, cl.pt, g)
                     
                     ## check to see whether we have gone past an acceleration command boundary.
                     ## if so, we must instead advance the clock to the boundary and start again
                     if tau < tau1:
                         dtau = tau1 - cl.pt
-                        cl.v, cl.x, cl.t = tauStep(dtau, cl.v, cl.x, cl.t, g)
+                        cl.v, cl.x, cl.t = Simulation.tauStep(dtau, cl.v, cl.x, cl.t, g)
                         cl.pt = tau1-0.000001  
                         continue
                     if tau > tau2:
                         dtau = tau2 - cl.pt
-                        cl.v, cl.x, cl.t = tauStep(dtau, cl.v, cl.x, cl.t, g)
+                        cl.v, cl.x, cl.t = Simulation.tauStep(dtau, cl.v, cl.x, cl.t, g)
                         cl.pt = tau2
                         continue
                     
@@ -484,6 +513,87 @@ class Simulation:
             plot.addItem(c)
             plot.addItem(p)
 
+class Animation(pg.ItemGroup):
+    def __init__(self, sim):
+        pg.ItemGroup.__init__(self)
+        self.sim = sim
+        self.clocks = sim.clocks
+        self.tStart = 0
+        self.tStop = sim.duration
+        self.t = 0
+        self.dt = 16
+        
+        self.items = {}
+        for name, cl in self.clocks.items():
+            item = ClockItem(cl)
+            self.addItem(item)
+            self.items[name] = item
+            
+        self.timer = QtCore.QTimer()
+        self.timer.timeout.connect(self.step)
+        self.timer.start(self.dt)
+        
+    def step(self):
+        self.t += self.dt * 0.001
+        if self.t > self.tStop:
+            self.t = self.tStart
+            for cl in self.items.values():
+                cl.reset()
+            
+        for i in self.items.values():
+            i.stepTo(self.t)
+
+class ClockItem(pg.ItemGroup):
+    def __init__(self, clock):
+        pg.ItemGroup.__init__(self)
+        self.size = 0.4
+        self.item = QtGui.QGraphicsEllipseItem(QtCore.QRectF(0, 0, self.size, self.size))
+        self.item.translate(-self.size*0.5, -self.size*0.5)
+        self.item.setPen(clock.pen)
+        self.item.setBrush(clock.brush)
+        self.hand = QtGui.QGraphicsLineItem(0, 0, 0, self.size*0.5)
+        self.hand.setPen(pg.mkPen('w'))
+        self.hand.setZValue(10)
+        self.flare = QtGui.QGraphicsPolygonItem(QtGui.QPolygonF([
+            QtCore.QPointF(0, -self.size*0.25),
+            QtCore.QPointF(0, self.size*0.25),
+            QtCore.QPointF(1, 0),
+            QtCore.QPointF(0, -self.size*0.25),
+            ]))
+        self.flare.setPen(pg.mkPen('y'))
+        self.flare.setBrush(pg.mkBrush(100,100,0))
+        self.flare.setZValue(-10)
+        self.addItem(self.hand)
+        self.addItem(self.item)
+        self.addItem(self.flare)
+ 
+        self.clock = clock
+        self.i = 1
+        
+    def stepTo(self, t):
+        data = self.clock.refData
+        
+        while self.i < len(data)-1 and data['t'][self.i] < t:
+            self.i += 1
+        while self.i > 1 and data['t'][self.i-1] >= t:
+            self.i -= 1
+        
+        self.setPos(data['x'][self.i], self.clock.y0)
+        
+        t = data['pt'][self.i]
+        self.hand.setRotation(-0.25 * t * 360.)
+        
+        self.resetTransform()
+        v = data['v'][self.i]
+        gam = (1.0 - v**2)**0.5
+        self.scale(gam, 1.0)
+        
+        self.flare.resetTransform()
+        self.flare.translate(self.size*0.4, 0)
+        self.flare.scale(-data['f'][self.i], 1.0)
+        
+    def reset(self):
+        self.i = 1
         
 
 if __name__ == '__main__':
@@ -494,7 +604,7 @@ if __name__ == '__main__':
     win.resize(1100,700)
     
     state = {'name': 'Objects', 'addText': 'Add New..', 'type': None, 'children': [
-        {'name': 'Clock', 'default': None, 'renamable': True, 'type': 'Clock', 'children': [
+        {'name': 'Alice', 'default': None, 'renamable': True, 'type': 'Clock', 'children': [
             {'name': 'Initial Position', 'value': 0.0, 'step': 0.1, 'type': 'float'}, 
             {'name': 'Acceleration', 'addText': 'Add Command..', 'type': 'AccelerationGroup', 'children': [
                 {'name': 'Command0', 'renamable': True, 'type': None, 'children': [
@@ -505,12 +615,26 @@ if __name__ == '__main__':
                     {'name': 'Acceleration', 'value': 1.0, 'step': 0.1, 'removable': False, 'type': 'float'}]}, 
                 {'name': 'Command2', 'renamable': True, 'type': None, 'children': [
                     {'name': 'Proper Time', 'value': 2.0, 'type': 'float'}, 
-                    {'name': 'Acceleration', 'value': -1.0, 'step': 0.1, 'removable': False, 'type': 'float'}]},
+                    {'name': 'Acceleration', 'value': 0.0, 'step': 0.1, 'removable': False, 'type': 'float'}]},
                 {'name': 'Command3', 'renamable': True, 'type': None, 'children': [
-                    {'name': 'Proper Time', 'value': 3.0, 'type': 'float'}, 
-                    {'name': 'Acceleration', 'value': 0.0, 'step': 0.1, 'removable': False, 'type': 'float'}]}
+                    {'name': 'Proper Time', 'value': 4.0, 'type': 'float'}, 
+                    {'name': 'Acceleration', 'value': -1.0, 'step': 0.1, 'removable': False, 'type': 'float'}]},
+                {'name': 'Command4', 'renamable': True, 'type': None, 'children': [
+                    {'name': 'Proper Time', 'value': 6.0, 'type': 'float'}, 
+                    {'name': 'Acceleration', 'value': 0.0, 'step': 0.1, 'removable': False, 'type': 'float'}]},
+                {'name': 'Command5', 'renamable': True, 'type': None, 'children': [
+                    {'name': 'Proper Time', 'value': 8.0, 'type': 'float'}, 
+                    {'name': 'Acceleration', 'value': 1.0, 'step': 0.1, 'removable': False, 'type': 'float'}]},
+                {'name': 'Command6', 'renamable': True, 'type': None, 'children': [
+                    {'name': 'Proper Time', 'value': 9.0, 'type': 'float'}, 
+                    {'name': 'Acceleration', 'value': 0.0, 'step': 0.1, 'removable': False, 'type': 'float'}]},
                 ]}, 
-            {'name': 'Rest Mass', 'limits': [1e-09, None], 'default': 1.0, 'value': 1.0, 'step': 0.1, 'removable': False, 'type': 'float'}, {'name': 'Color', 'default': (200, 200, 255), 'value': (200, 200, 255), 'type': 'color'}, {'name': 'Show Clock', 'default': True, 'value': True, 'type': 'bool'}]}]}
+            {'name': 'Rest Mass', 'limits': [1e-09, None], 'default': 1.0, 'value': 1.0, 'step': 0.1, 'removable': False, 'type': 'float'}, {'name': 'Color', 'value': (230, 0, 0), 'type': 'color'}, {'name': 'Show Clock', 'default': True, 'value': True, 'type': 'bool'}]},
+        {'name': 'Bob', 'default': None, 'renamable': True, 'type': 'Clock', 'children': [
+            {'name': 'Initial Position', 'value': 0.0, 'step': 0.1, 'type': 'float'}, 
+            {'name': 'Acceleration', 'addText': 'Add Command..', 'type': 'AccelerationGroup'},
+            {'name': 'Rest Mass', 'limits': [1e-09, None], 'default': 1.0, 'value': 1.0, 'step': 0.1, 'removable': False, 'type': 'float'}, {'name': 'Color', 'value': (0, 200, 0), 'type': 'color'}, {'name': 'Show Clock', 'default': True, 'value': True, 'type': 'bool'}]},
+        ]}
     
     
     win.params.param('Objects').restoreState(state)
