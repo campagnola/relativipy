@@ -126,16 +126,19 @@ class ClockParam(pTypes.GroupParameter):
             dict(name='Rest Mass', type='float', value=1.0, step=0.1, limits=[1e-9, None]),
             dict(name='Color', type='color', value=(200,200,255)),
             dict(name='Show Clock', type='bool', value=True),
+            dict(name='Vertical Position', type='float', value=0.0, step=0.1),
             ])
-        defs.update(kwds)
+        #defs.update(kwds)
         pTypes.GroupParameter.__init__(self, **defs)
+        self.restoreState(kwds)
             
     def buildClocks(self):
         x0 = self['Initial Position']
+        y0 = self['Vertical Position']
         color = self['Color']
         m = self['Rest Mass']
         prog = self.param('Acceleration').generate()
-        c = Clock(x0=x0, m0=m, color=color, prog=prog)
+        c = Clock(x0=x0, m0=m, y0=y0, color=color, prog=prog)
         return {self.name(): c}
 
 pTypes.registerParameterType('Clock', ClockParam)
@@ -652,5 +655,5 @@ if __name__ == '__main__':
         ]}
     
     
-    win.params.param('Objects').restoreState(state)
+    win.params.param('Objects').restoreState(state, removeChildren=False)
 
