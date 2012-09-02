@@ -5,9 +5,6 @@ import user
 import collections
 import sys
 
-def gamma(v):
-    return (1.0 - v**2) ** -0.5
-
 class Clock(object):
     nClocks = 0
     
