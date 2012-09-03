@@ -58,6 +58,8 @@ class RelativityGUI(QtGui.QWidget):
         self.animationPlots = pg.GraphicsLayoutWidget()
         self.splitter2.addWidget(self.animationPlots)
         
+        self.splitter2.setSizes([int(self.height()*0.8), int(self.height()*0.2)])
+        
         self.inertWorldlinePlot = self.worldlinePlots.addPlot()
         self.refWorldlinePlot = self.worldlinePlots.addPlot()
         
@@ -81,6 +83,7 @@ class RelativityGUI(QtGui.QWidget):
         sim1 = Simulation(clocks1, ref=None, duration=self.params['Duration'])
         sim1.run()
         sim1.plot(self.inertWorldlinePlot)
+        self.inertWorldlinePlot.autoRange(padding=0.1)
         
         ## reference simulation
         ref = self.params['Reference Frame']
@@ -88,6 +91,8 @@ class RelativityGUI(QtGui.QWidget):
         sim2 = Simulation(clocks2, ref=clocks2[ref], duration=dur)
         sim2.run()
         sim2.plot(self.refWorldlinePlot)
+        self.refWorldlinePlot.autoRange(padding=0.1)
+        
         
         ## create animations
         self.refAnimationPlot.clear()
@@ -120,9 +125,7 @@ class RelativityGUI(QtGui.QWidget):
         
     def treeChanged(self, *args):
         clocks = [c.name() for c in self.params.param('Objects')]
-        print "Tree changes:"
-        for param, change, data in args[1]:
-            print "   ", param.name(), change
+        #for param, change, data in args[1]:
             #if change == 'childAdded':
         self.params.param('Reference Frame').setLimits(clocks)
         self.setAnimation(self.params['Animate'])
@@ -145,7 +148,7 @@ class ClockParam(pTypes.GroupParameter):
             AccelerationGroup(),
             
             dict(name='Rest Mass', type='float', value=1.0, step=0.1, limits=[1e-9, None]),
-            dict(name='Color', type='color', value=(200,200,255)),
+            dict(name='Color', type='color', value=(100,100,150)),
             dict(name='Show Clock', type='bool', value=True),
             dict(name='Vertical Position', type='float', value=0.0, step=0.1),
             ])
@@ -583,7 +586,7 @@ class ClockItem(pg.ItemGroup):
         self.size = 0.4
         self.item = QtGui.QGraphicsEllipseItem(QtCore.QRectF(0, 0, self.size, self.size))
         self.item.translate(-self.size*0.5, -self.size*0.5)
-        self.item.setPen(clock.pen)
+        self.item.setPen(pg.mkPen(100,100,100))
         self.item.setBrush(clock.brush)
         self.hand = QtGui.QGraphicsLineItem(0, 0, 0, self.size*0.5)
         self.hand.setPen(pg.mkPen('w'))
@@ -595,7 +598,7 @@ class ClockItem(pg.ItemGroup):
             QtCore.QPointF(0, -self.size*0.25),
             ]))
         self.flare.setPen(pg.mkPen('y'))
-        self.flare.setBrush(pg.mkBrush(100,100,0))
+        self.flare.setBrush(pg.mkBrush(255,150,0))
         self.flare.setZValue(-10)
         self.addItem(self.hand)
         self.addItem(self.item)
@@ -622,9 +625,14 @@ class ClockItem(pg.ItemGroup):
         gam = (1.0 - v**2)**0.5
         self.scale(gam, 1.0)
         
+        f = data['f'][self.i]
         self.flare.resetTransform()
-        self.flare.translate(self.size*0.4, 0)
-        self.flare.scale(-data['f'][self.i], 1.0)
+        if f < 0:
+            self.flare.translate(self.size*0.4, 0)
+        else:
+            self.flare.translate(-self.size*0.4, 0)
+        
+        self.flare.scale(-f * (0.5+np.random.random()*0.1), 1.0)
         
     def reset(self):
         self.i = 1
@@ -632,10 +640,10 @@ class ClockItem(pg.ItemGroup):
 
 if __name__ == '__main__':
     pg.mkQApp()
-    import pyqtgraph.console
-    cw = pyqtgraph.console.ConsoleWidget()
-    cw.show()
-    cw.catchNextException()
+    #import pyqtgraph.console
+    #cw = pyqtgraph.console.ConsoleWidget()
+    #cw.show()
+    #cw.catchNextException()
     win = RelativityGUI()
     win.setWindowTitle("Relativity!")
     win.show()
