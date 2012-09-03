@@ -28,10 +28,14 @@ class RelativityGUI(QtGui.QWidget):
             dict(name='Recalculate Worldlines', type='action'),
             self.objectGroup,
             ])
-            
         self.tree.setParameters(self.params, showTop=False)
         self.params.param('Recalculate Worldlines').sigActivated.connect(self.recalculate)
         self.params.sigTreeStateChanged.connect(self.treeChanged)
+        
+        self.animTimer = QtCore.QTimer()
+        self.animTimer.timeout.connect(self.stepAnimation)
+        self.animTime = 0
+        self.animDt = 16
         
     def setupGUI(self):
         self.layout = QtGui.QVBoxLayout()
@@ -88,6 +92,7 @@ class RelativityGUI(QtGui.QWidget):
         ## create animations
         self.refAnimationPlot.clear()
         self.inertAnimationPlot.clear()
+        self.animTime = 0
         self.setAnimation(False)
         
         self.animations = [Animation(sim1), Animation(sim2)]
@@ -97,14 +102,30 @@ class RelativityGUI(QtGui.QWidget):
         
 
     def setAnimation(self, a):
-        for anim in self.animations:
-            anim.run(a)
+        if a:
+            self.animTimer.start(16)
+        else:
+            self.animTimer.stop()
+            
+    def stepAnimation(self):
+        self.animTime += self.animDt * 0.001
+        if self.animTime > self.params['Duration']:
+            self.animTime = 0
+            for a in self.animations:
+                a.restart()
+            
+        for a in self.animations:
+            a.stepTo(self.animTime)
+            
         
     def treeChanged(self, *args):
         clocks = [c.name() for c in self.params.param('Objects')]
+        print "Tree changes:"
+        for param, change, data in args[1]:
+            print "   ", param.name(), change
+            #if change == 'childAdded':
         self.params.param('Reference Frame').setLimits(clocks)
-        for a in self.animations:
-            a.run(self.params['Animate'])
+        self.setAnimation(self.params['Animate'])
         
         
 class ObjectGroupParam(pTypes.GroupParameter):
@@ -130,7 +151,7 @@ class ClockParam(pTypes.GroupParameter):
             ])
         #defs.update(kwds)
         pTypes.GroupParameter.__init__(self, **defs)
-        self.restoreState(kwds)
+        self.restoreState(kwds, removeChildren=False)
             
     def buildClocks(self):
         x0 = self['Initial Position']
@@ -147,8 +168,8 @@ pTypes.registerParameterType('Clock', ClockParam)
 class AccelerationGroup(pTypes.GroupParameter):
     def __init__(self, **kwds):
         defs = dict(name="Acceleration", addText="Add Command..")
-        defs.update(kwds)
         pTypes.GroupParameter.__init__(self, **defs)
+        self.restoreState(kwds, removeChildren=False)
         
     def addNew(self):
         nextTime = 0.0
@@ -531,10 +552,6 @@ class Animation(pg.ItemGroup):
         pg.ItemGroup.__init__(self)
         self.sim = sim
         self.clocks = sim.clocks
-        self.tStart = 0
-        self.tStop = sim.duration
-        self.t = 0
-        self.dt = 16
         
         self.items = {}
         for name, cl in self.clocks.items():
@@ -542,24 +559,23 @@ class Animation(pg.ItemGroup):
             self.addItem(item)
             self.items[name] = item
             
-        self.timer = QtCore.QTimer()
-        self.timer.timeout.connect(self.step)
+        #self.timer = timer
+        #self.timer.timeout.connect(self.step)
         
-    def run(self, run):
-        if not run:
-            self.timer.stop()
-        else:
-            self.timer.start(self.dt)
+    #def run(self, run):
+        #if not run:
+            #self.timer.stop()
+        #else:
+            #self.timer.start(self.dt)
         
-    def step(self):
-        self.t += self.dt * 0.001
-        if self.t > self.tStop:
-            self.t = self.tStart
-            for cl in self.items.values():
-                cl.reset()
-            
+    def restart(self):
+        for cl in self.items.values():
+            cl.reset()
+        
+    def stepTo(self, t):
         for i in self.items.values():
-            i.stepTo(self.t)
+            i.stepTo(t)
+        
 
 class ClockItem(pg.ItemGroup):
     def __init__(self, clock):
@@ -616,6 +632,10 @@ class ClockItem(pg.ItemGroup):
 
 if __name__ == '__main__':
     pg.mkQApp()
+    import pyqtgraph.console
+    cw = pyqtgraph.console.ConsoleWidget()
+    cw.show()
+    cw.catchNextException()
     win = RelativityGUI()
     win.setWindowTitle("Relativity!")
     win.show()
