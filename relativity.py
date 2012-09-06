@@ -124,7 +124,9 @@ class RelativityGUI(QtGui.QWidget):
             
         
     def treeChanged(self, *args):
-        clocks = [c.name() for c in self.params.param('Objects')]
+        clocks = []
+        for c in self.params.param('Objects'):
+            clocks.extend(c.clockNames())
         #for param, change, data in args[1]:
             #if change == 'childAdded':
         self.params.param('Reference Frame').setLimits(clocks)
@@ -138,7 +140,8 @@ class ObjectGroupParam(pTypes.GroupParameter):
     def addNew(self, typ):
         if typ == 'Clock':
             self.addChild(ClockParam())
-        
+        elif typ == 'Grid':
+            self.addChild(GridParam())
 
 class ClockParam(pTypes.GroupParameter):
     def __init__(self, **kwds):
@@ -164,9 +167,37 @@ class ClockParam(pTypes.GroupParameter):
         prog = self.param('Acceleration').generate()
         c = Clock(x0=x0, m0=m, y0=y0, color=color, prog=prog)
         return {self.name(): c}
+        
+    def clockNames(self):
+        return [self.name()]
 
 pTypes.registerParameterType('Clock', ClockParam)
     
+class GridParam(pTypes.GroupParameter):
+    def __init__(self, **kwds):
+        defs = dict(name="Grid", autoIncrementName=True, renamable=True, removable=True, children=[
+            dict(name='Number of Clocks', type='int', value=5, limits=[1, None]),
+            dict(name='Spacing', type='float', value=1.0, step=0.1),
+            ClockParam(name='ClockTemplate'),
+            ])
+        #defs.update(kwds)
+        pTypes.GroupParameter.__init__(self, **defs)
+        self.restoreState(kwds, removeChildren=False)
+            
+    def buildClocks(self):
+        clocks = {}
+        template = self.param('ClockTemplate')
+        spacing = self['Spacing']
+        for i in range(self['Number of Clocks']):
+            c = template.buildClocks().values()[0]
+            c.x0 += i * spacing
+            clocks[self.name() + '%02d' % i] = c
+        return clocks
+        
+    def clockNames(self):
+        return [self.name() + '%02d' % i for i in range(self['Number of Clocks'])]
+
+pTypes.registerParameterType('Grid', GridParam)
 
 class AccelerationGroup(pTypes.GroupParameter):
     def __init__(self, **kwds):
