@@ -25,6 +25,7 @@ class RelativityGUI(QtGui.QWidget):
             dict(name='Duration', type='float', value=10.0, step=0.1, limits=[0.1, None]),
             dict(name='Reference Frame', type='list', values=[]),
             dict(name='Animate', type='bool', value=True),
+            dict(name='Animation Speed', type='float', value=1.0, dec=True, step=0.1, limits=[0.0001, None]),
             dict(name='Recalculate Worldlines', type='action'),
             self.objectGroup,
             ])
@@ -35,7 +36,7 @@ class RelativityGUI(QtGui.QWidget):
         self.animTimer = QtCore.QTimer()
         self.animTimer.timeout.connect(self.stepAnimation)
         self.animTime = 0
-        self.animDt = 16
+        self.animDt = .016
         
     def setupGUI(self):
         self.layout = QtGui.QVBoxLayout()
@@ -80,7 +81,8 @@ class RelativityGUI(QtGui.QWidget):
             clocks2.update(cl.buildClocks())
         
         ## Inertial simulation
-        sim1 = Simulation(clocks1, ref=None, duration=self.params['Duration'])
+        dt = self.animDt * self.params['Animation Speed']
+        sim1 = Simulation(clocks1, ref=None, duration=self.params['Duration'], dt=dt)
         sim1.run()
         sim1.plot(self.inertWorldlinePlot)
         self.inertWorldlinePlot.autoRange(padding=0.1)
@@ -88,7 +90,7 @@ class RelativityGUI(QtGui.QWidget):
         ## reference simulation
         ref = self.params['Reference Frame']
         dur = clocks1[ref].refData['pt'][-1] ## decide how long to run the reference simulation
-        sim2 = Simulation(clocks2, ref=clocks2[ref], duration=dur)
+        sim2 = Simulation(clocks2, ref=clocks2[ref], duration=dur, dt=dt)
         sim2.run()
         sim2.plot(self.refWorldlinePlot)
         self.refWorldlinePlot.autoRange(padding=0.1)
@@ -108,12 +110,13 @@ class RelativityGUI(QtGui.QWidget):
 
     def setAnimation(self, a):
         if a:
-            self.animTimer.start(16)
+            self.animTimer.start(self.animDt*1000)
         else:
             self.animTimer.stop()
             
     def stepAnimation(self):
-        self.animTime += self.animDt * 0.001
+        dt = self.animDt * self.params['Animation Speed']
+        self.animTime += dt
         if self.animTime > self.params['Duration']:
             self.animTime = 0
             for a in self.animations:
@@ -347,11 +350,11 @@ class Clock(object):
 
 
 class Simulation:
-    def __init__(self, clocks, ref, duration):
+    def __init__(self, clocks, ref, duration, dt):
         self.clocks = clocks
         self.ref = ref
         self.duration = duration
-        self.dt = 0.015
+        self.dt = dt
     
     @staticmethod
     def hypTStep(dt, v0, x0, tau0, g):
