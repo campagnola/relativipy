@@ -152,7 +152,7 @@ class ClockParam(pTypes.GroupParameter):
             
             dict(name='Rest Mass', type='float', value=1.0, step=0.1, limits=[1e-9, None]),
             dict(name='Color', type='color', value=(100,100,150)),
-            dict(name='Show Clock', type='bool', value=True),
+            dict(name='Size', type='float', value=0.5),
             dict(name='Vertical Position', type='float', value=0.0, step=0.1),
             ])
         #defs.update(kwds)
@@ -164,8 +164,9 @@ class ClockParam(pTypes.GroupParameter):
         y0 = self['Vertical Position']
         color = self['Color']
         m = self['Rest Mass']
+        size = self['Size']
         prog = self.param('Acceleration').generate()
-        c = Clock(x0=x0, m0=m, y0=y0, color=color, prog=prog)
+        c = Clock(x0=x0, m0=m, y0=y0, color=color, prog=prog, size=size)
         return {self.name(): c}
         
     def clockNames(self):
@@ -226,7 +227,7 @@ pTypes.registerParameterType('AccelerationGroup', AccelerationGroup)
 class Clock(object):
     nClocks = 0
     
-    def __init__(self, x0=0.0, y0=0.0, m0=1.0, v0=0.0, t0=0.0, color=None, prog=None):
+    def __init__(self, x0=0.0, y0=0.0, m0=1.0, v0=0.0, t0=0.0, color=None, prog=None, size=0.5):
         Clock.nClocks += 1
         self.pen = pg.mkPen(color)
         self.brush = pg.mkBrush(color)
@@ -236,6 +237,7 @@ class Clock(object):
         self.m0 = m0
         self.t0 = t0
         self.prog = prog
+        self.size = size
 
     def init(self, nPts):
         ## Keep records of object from inertial frame as well as reference frame
@@ -614,7 +616,7 @@ class Animation(pg.ItemGroup):
 class ClockItem(pg.ItemGroup):
     def __init__(self, clock):
         pg.ItemGroup.__init__(self)
-        self.size = 0.4
+        self.size = clock.size
         self.item = QtGui.QGraphicsEllipseItem(QtCore.QRectF(0, 0, self.size, self.size))
         self.item.translate(-self.size*0.5, -self.size*0.5)
         self.item.setPen(pg.mkPen(100,100,100))
@@ -625,7 +627,7 @@ class ClockItem(pg.ItemGroup):
         self.flare = QtGui.QGraphicsPolygonItem(QtGui.QPolygonF([
             QtCore.QPointF(0, -self.size*0.25),
             QtCore.QPointF(0, self.size*0.25),
-            QtCore.QPointF(1, 0),
+            QtCore.QPointF(self.size*1.5, 0),
             QtCore.QPointF(0, -self.size*0.25),
             ]))
         self.flare.setPen(pg.mkPen('y'))
