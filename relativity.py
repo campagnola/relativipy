@@ -38,6 +38,8 @@ class RelativityGUI(QtGui.QWidget):
         self.animTime = 0
         self.animDt = .016
         
+        self.lastAnimTime = 0
+        
     def setupGUI(self):
         self.layout = QtGui.QVBoxLayout()
         self.layout.setContentsMargins(0,0,0,0)
@@ -106,16 +108,26 @@ class RelativityGUI(QtGui.QWidget):
         self.inertAnimationPlot.addItem(self.animations[0])
         self.refAnimationPlot.addItem(self.animations[1])
         
+        ## create lines representing all that is visible to a particular reference
+        #self.inertSpaceline = Spaceline(sim1, ref)
+        #self.refSpaceline = Spaceline(sim2)
+        self.inertWorldlinePlot.addItem(self.animations[0].items[ref].spaceline())
+        self.refWorldlinePlot.addItem(self.animations[1].items[ref].spaceline())
+        
+        
         
 
     def setAnimation(self, a):
         if a:
+            self.lastAnimTime = pg.ptime.time()
             self.animTimer.start(self.animDt*1000)
         else:
             self.animTimer.stop()
             
     def stepAnimation(self):
-        dt = self.animDt * self.params['Animation Speed']
+        now = pg.ptime.time()
+        dt = (now-self.lastAnimTime) * self.params['Animation Speed']
+        self.lastAnimTime = now
         self.animTime += dt
         if self.animTime > self.params['Duration']:
             self.animTime = 0
@@ -643,6 +655,15 @@ class ClockItem(pg.ItemGroup):
         self.clock = clock
         self.i = 1
         
+        self._spaceline = None
+        
+        
+    def spaceline(self):
+        if self._spaceline is None:
+            self._spaceline = pg.InfiniteLine()
+            self._spaceline.setPen(self.clock.pen)
+        return self._spaceline
+        
     def stepTo(self, t):
         data = self.clock.refData
         
@@ -670,10 +691,27 @@ class ClockItem(pg.ItemGroup):
         
         self.flare.scale(-f * (0.5+np.random.random()*0.1), 1.0)
         
+        if self._spaceline is not None:
+            self._spaceline.setPos(pg.Point(data['x'][self.i], data['t'][self.i]))
+            self._spaceline.setAngle(data['v'][self.i] * 45.)
+        
+        
     def reset(self):
         self.i = 1
         
 
+#class Spaceline(pg.InfiniteLine):
+    #def __init__(self, sim, frame):
+        #self.sim = sim
+        #self.frame = frame
+        #pg.InfiniteLine.__init__(self)
+        #self.setPen(sim.clocks[frame].pen)
+        
+    #def stepTo(self, t):
+        #self.setAngle(0)
+        
+        #pass
+        
 if __name__ == '__main__':
     pg.mkQApp()
     #import pyqtgraph.console
