@@ -2,10 +2,11 @@ import pyqtgraph as pg
 from pyqtgraph.Qt import QtGui, QtCore
 from pyqtgraph.parametertree import Parameter, ParameterTree
 from pyqtgraph.parametertree import types as pTypes
+import pyqtgraph.configfile
 import numpy as np
 import user
 import collections
-import sys
+import sys, os
 
 
 
@@ -14,6 +15,11 @@ class RelativityGUI(QtGui.QWidget):
         QtGui.QWidget.__init__(self)
         
         self.animations = []
+        self.animTimer = QtCore.QTimer()
+        self.animTimer.timeout.connect(self.stepAnimation)
+        self.animTime = 0
+        self.animDt = .016
+        self.lastAnimTime = 0
         
         self.setupGUI()
         
@@ -27,18 +33,25 @@ class RelativityGUI(QtGui.QWidget):
             dict(name='Animate', type='bool', value=True),
             dict(name='Animation Speed', type='float', value=1.0, dec=True, step=0.1, limits=[0.0001, None]),
             dict(name='Recalculate Worldlines', type='action'),
+            dict(name='Save', type='action'),
+            dict(name='Load', type='action'),
             self.objectGroup,
             ])
         self.tree.setParameters(self.params, showTop=False)
         self.params.param('Recalculate Worldlines').sigActivated.connect(self.recalculate)
+        self.params.param('Save').sigActivated.connect(self.save)
+        self.params.param('Load').sigActivated.connect(self.load)
+        self.params.param('Load Preset..').sigValueChanged.connect(self.loadPreset)
         self.params.sigTreeStateChanged.connect(self.treeChanged)
         
-        self.animTimer = QtCore.QTimer()
-        self.animTimer.timeout.connect(self.stepAnimation)
-        self.animTime = 0
-        self.animDt = .016
+        ## read list of preset configs
+        presetDir = os.path.join(os.path.abspath(os.path.dirname(sys.argv[0])), 'presets')
+        if os.path.exists(presetDir):
+            presets = [os.path.splitext(p)[0] for p in os.listdir(presetDir)]
+            self.params.param('Load Preset..').setLimits(['']+presets)
         
-        self.lastAnimTime = 0
+        
+        
         
     def setupGUI(self):
         self.layout = QtGui.QVBoxLayout()
@@ -146,6 +159,26 @@ class RelativityGUI(QtGui.QWidget):
             #if change == 'childAdded':
         self.params.param('Reference Frame').setLimits(clocks)
         self.setAnimation(self.params['Animate'])
+        
+    def save(self):
+        fn = str(pg.QtGui.QFileDialog.getSaveFileName(self, "Save State..", "untitled.cfg", "Config Files (*.cfg)"))
+        state = self.params.saveState()
+        del state['children']['Load Preset..']
+        pg.configfile.writeConfigFile(state, fn) 
+        
+    def load(self):
+        fn = str(pg.QtGui.QFileDialog.getOpenFileName(self, "Save State..", "", "Config Files (*.cfg)"))
+        state = pg.configfile.readConfigFile(fn) 
+        self.params.restoreState(state)
+        
+    def loadPreset(self, param, preset):
+        if preset == '':
+            return
+        path = os.path.abspath(os.path.dirname(sys.argv[0]))
+        fn = os.path.join(path, 'presets', preset+".cfg")
+        state = pg.configfile.readConfigFile(fn)
+        self.params.restoreState(state)
+        
         
         
 class ObjectGroupParam(pTypes.GroupParameter):
@@ -711,51 +744,19 @@ class ClockItem(pg.ItemGroup):
         #self.setAngle(0)
         
         #pass
-        
+
 if __name__ == '__main__':
     pg.mkQApp()
-    #import pyqtgraph.console
-    #cw = pyqtgraph.console.ConsoleWidget()
-    #cw.show()
-    #cw.catchNextException()
+    import pyqtgraph.console
+    cw = pyqtgraph.console.ConsoleWidget()
+    cw.show()
+    cw.catchNextException()
     win = RelativityGUI()
     win.setWindowTitle("Relativity!")
     win.show()
     win.resize(1100,700)
     
-    state = {'name': 'Objects', 'addText': 'Add New..', 'type': None, 'children': [
-        {'name': 'Alice', 'default': None, 'renamable': True, 'type': 'Clock', 'children': [
-            {'name': 'Initial Position', 'value': 0.0, 'step': 0.1, 'type': 'float'}, 
-            {'name': 'Acceleration', 'addText': 'Add Command..', 'type': 'AccelerationGroup', 'children': [
-                {'name': 'Command0', 'renamable': True, 'type': None, 'children': [
-                    {'name': 'Proper Time', 'value': 0.0, 'type': 'float'}, 
-                    {'name': 'Acceleration', 'value': 0.0, 'step': 0.1, 'removable': False, 'type': 'float'}]}, 
-                {'name': 'Command1', 'renamable': True, 'type': None, 'children': [
-                    {'name': 'Proper Time', 'value': 1.0, 'type': 'float'}, 
-                    {'name': 'Acceleration', 'value': 1.0, 'step': 0.1, 'removable': False, 'type': 'float'}]}, 
-                {'name': 'Command2', 'renamable': True, 'type': None, 'children': [
-                    {'name': 'Proper Time', 'value': 2.0, 'type': 'float'}, 
-                    {'name': 'Acceleration', 'value': 0.0, 'step': 0.1, 'removable': False, 'type': 'float'}]},
-                {'name': 'Command3', 'renamable': True, 'type': None, 'children': [
-                    {'name': 'Proper Time', 'value': 4.0, 'type': 'float'}, 
-                    {'name': 'Acceleration', 'value': -1.0, 'step': 0.1, 'removable': False, 'type': 'float'}]},
-                {'name': 'Command4', 'renamable': True, 'type': None, 'children': [
-                    {'name': 'Proper Time', 'value': 6.0, 'type': 'float'}, 
-                    {'name': 'Acceleration', 'value': 0.0, 'step': 0.1, 'removable': False, 'type': 'float'}]},
-                {'name': 'Command5', 'renamable': True, 'type': None, 'children': [
-                    {'name': 'Proper Time', 'value': 8.0, 'type': 'float'}, 
-                    {'name': 'Acceleration', 'value': 1.0, 'step': 0.1, 'removable': False, 'type': 'float'}]},
-                {'name': 'Command6', 'renamable': True, 'type': None, 'children': [
-                    {'name': 'Proper Time', 'value': 9.0, 'type': 'float'}, 
-                    {'name': 'Acceleration', 'value': 0.0, 'step': 0.1, 'removable': False, 'type': 'float'}]},
-                ]}, 
-            {'name': 'Rest Mass', 'limits': [1e-09, None], 'default': 1.0, 'value': 1.0, 'step': 0.1, 'removable': False, 'type': 'float'}, {'name': 'Color', 'value': (0, 50, 200), 'type': 'color'}, {'name': 'Show Clock', 'default': True, 'value': True, 'type': 'bool'}]},
-        {'name': 'Bob', 'default': None, 'renamable': True, 'type': 'Clock', 'children': [
-            {'name': 'Initial Position', 'value': 0.0, 'step': 0.1, 'type': 'float'}, 
-            {'name': 'Acceleration', 'addText': 'Add Command..', 'type': 'AccelerationGroup'},
-            {'name': 'Rest Mass', 'limits': [1e-09, None], 'default': 1.0, 'value': 1.0, 'step': 0.1, 'removable': False, 'type': 'float'}, {'name': 'Color', 'value': (50, 200, 0), 'type': 'color'}, {'name': 'Show Clock', 'default': True, 'value': True, 'type': 'bool'}]},
-        ]}
     
     
-    win.params.param('Objects').restoreState(state, removeChildren=False)
+    #win.params.param('Objects').restoreState(state, removeChildren=False)
 
