@@ -115,7 +115,6 @@ class RelativityGUI(QtGui.QWidget):
         self.refAnimationPlot.clear()
         self.inertAnimationPlot.clear()
         self.animTime = 0
-        self.setAnimation(False)
         
         self.animations = [Animation(sim1), Animation(sim2)]
         self.inertAnimationPlot.addItem(self.animations[0])
@@ -162,14 +161,17 @@ class RelativityGUI(QtGui.QWidget):
         
     def save(self):
         fn = str(pg.QtGui.QFileDialog.getSaveFileName(self, "Save State..", "untitled.cfg", "Config Files (*.cfg)"))
+        if fn == '':
+            return
         state = self.params.saveState()
-        del state['children']['Load Preset..']
         pg.configfile.writeConfigFile(state, fn) 
         
     def load(self):
         fn = str(pg.QtGui.QFileDialog.getOpenFileName(self, "Save State..", "", "Config Files (*.cfg)"))
+        if fn == '':
+            return
         state = pg.configfile.readConfigFile(fn) 
-        self.params.restoreState(state)
+        self.loadState(state)
         
     def loadPreset(self, param, preset):
         if preset == '':
@@ -177,8 +179,15 @@ class RelativityGUI(QtGui.QWidget):
         path = os.path.abspath(os.path.dirname(sys.argv[0]))
         fn = os.path.join(path, 'presets', preset+".cfg")
         state = pg.configfile.readConfigFile(fn)
-        self.params.restoreState(state)
+        self.loadState(state)
         
+    def loadState(self, state):
+        if 'Load Preset..' in state['children']:
+            del state['children']['Load Preset..']['limits']
+            del state['children']['Load Preset..']['value']
+        self.params.param('Objects').clearChildren()
+        self.params.restoreState(state, removeChildren=False)
+        self.recalculate()
         
         
 class ObjectGroupParam(pTypes.GroupParameter):
@@ -747,15 +756,17 @@ class ClockItem(pg.ItemGroup):
 
 if __name__ == '__main__':
     pg.mkQApp()
-    import pyqtgraph.console
-    cw = pyqtgraph.console.ConsoleWidget()
-    cw.show()
-    cw.catchNextException()
+    #import pyqtgraph.console
+    #cw = pyqtgraph.console.ConsoleWidget()
+    #cw.show()
+    #cw.catchNextException()
     win = RelativityGUI()
     win.setWindowTitle("Relativity!")
     win.show()
     win.resize(1100,700)
     
+    if (sys.flags.interactive != 1) or not hasattr(QtCore, 'PYQT_VERSION'):
+        QtGui.QApplication.instance().exec_()
     
     
     #win.params.param('Objects').restoreState(state, removeChildren=False)
